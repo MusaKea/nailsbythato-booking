@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bookings – NailsbyThato</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <script src="demo-api.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>Bookings</h1><p>NailsbyThato</p></header>
+  <main>
+    <section id="login">
+      <p class="note">Demo admin password: <b>demo</b>. You will see the bookings made in this browser.</p>
+      <label class="field">Admin password <input type="password" id="pw"></label>
+      <p class="error" id="error" role="alert"></p>
+      <button class="btn" id="go">Show bookings</button>
+    </section>
+    <div id="list"></div>
+  </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let pw = sessionStorage.getItem('pw') || '';
+
+async function load() {
+  const res = await fetch('/api/admin/bookings', { headers: { 'x-admin-password': pw } });
+  if (!res.ok) { sessionStorage.removeItem('pw'); $('login').hidden = false; if (pw) $('error').textContent = 'Wrong password.'; return; }
+  sessionStorage.setItem('pw', pw);
+  $('login').hidden = true;
+  const today = new Date().toLocaleDateString('en-CA');
+  const rows = (await res.json()).filter(b => b.date >= today);
+  if (!rows.length) { $('list').innerHTML = '<p class="note">No upcoming bookings.</p>'; return; }
+  let html = '', last = '';
+  for (const b of rows) {
+    if (b.date !== last) {
+      last = b.date;
+      html += `<div class="day">${new Date(b.date + 'T00:00:00').toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' })}</div>`;
+    }
+    html += `<div class="booking"><div><b>${esc(b.time)}</b> · ${esc(b.name)}<br>${esc(b.service)} (${b.duration} min, R${b.price})<br>
+      <a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>${b.email ? '<br>' + esc(b.email) : ''}<br>
+      <span class="badge ${b.depositPaid ? 'paid' : ''}">${b.depositPaid ? 'Deposit paid' : 'Deposit R' + (b.deposit || 100) + ' not paid yet'}</span></div>
+      <div class="actions"><button class="btn small" data-dep="${esc(b.id)}">${b.depositPaid ? 'Undo paid' : 'Mark deposit paid'}</button>
+      <button class="btn small" data-id="${esc(b.id)}">Cancel</button></div></div>`;
+  }
+  $('list').innerHTML = html;
+  document.querySelectorAll('[data-dep]').forEach(btn => btn.addEventListener('click', async () => {
+    await fetch('/api/admin/bookings/' + btn.dataset.dep + '/deposit', { method: 'PATCH', headers: { 'x-admin-password': pw } });
+    load();
+  }));
+  document.querySelectorAll('[data-id]').forEach(btn => btn.addEventListener('click', async () => {
+    if (!confirm('Cancel this booking?')) return;
+    await fetch('/api/admin/bookings/' + btn.dataset.id, { method: 'DELETE', headers: { 'x-admin-password': pw } });
+    load();
+  }));
+}
+$('go').addEventListener('click', () => { pw = $('pw').value; load(); });
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+if (pw) load();
+</script>
+</body>
+</html>

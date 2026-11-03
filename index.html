@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book an appointment – NailsbyThato</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <script src="demo-api.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>NailsbyThato</h1>
+    <p>Nail studio &middot; Daveyton, Benoni</p>
+  </header>
+  <div class="gallery">
+    <img src="images/gallery-1.jpg" alt="Nude almond nails with white and chrome swirl art">
+    <img src="images/gallery-2.jpg" alt="Stiletto nails with gold crystal detail">
+    <img src="images/gallery-3.jpg" alt="Teal cat-eye almond nails">
+  </div>
+  <main id="app">
+    <section>
+      <h2>About</h2>
+      <p>Welcome to NailsbyThato, a nail studio in Daveyton, Benoni. Choose your set below and book your time online.</p>
+    </section>
+    <section class="step">
+      <h2>Treatment</h2>
+      <div class="services" id="services"></div>
+    </section>
+    <section class="step">
+      <h2>Date</h2>
+      <input type="date" id="date" aria-label="Appointment date">
+      <p class="note">We are closed on Sundays.</p>
+    </section>
+    <section class="step">
+      <h2>Time</h2>
+      <div class="slots" id="slots"><p class="note">Choose a treatment and date to see free times.</p></div>
+    </section>
+    <section class="step">
+      <h2>Your details</h2>
+      <label class="field">Name <input type="text" id="name" autocomplete="name"></label>
+      <label class="field">Cell number <input type="tel" id="phone" autocomplete="tel"></label>
+      <label class="field">Email address (your confirmation is sent here) <input type="email" id="email" autocomplete="email"></label>
+    </section>
+    <section>
+      <h2>Booking policy</h2>
+      <details class="policy"><summary>Read the booking policy</summary>
+      <div>
+        <h3>Deposit and booking</h3>
+        <ul>
+          <li>A non-refundable deposit of R100 is required to secure your booking. It goes toward your total cost.</li>
+          <li>After you book, send the deposit and your booking is confirmed once Thato receives it.</li>
+        </ul>
+        <h3>Cancellations and rescheduling</h3>
+        <ul>
+          <li>Please give at least 24 hours' notice to cancel or reschedule.</li>
+          <li>Cancelling with less than 24 hours' notice means you forfeit your deposit.</li>
+          <li>No-shows are charged the full service fee and may lose online booking privileges.</li>
+        </ul>
+        <h3>Arriving late</h3>
+        <ul>
+          <li>There is a 15 minute grace period.</li>
+          <li>After that, your service may be shortened or rescheduled so other clients aren't delayed. The full fee still applies.</li>
+        </ul>
+        <h3>Health and safety</h3>
+        <ul>
+          <li>We cannot work on nails or skin with fungal infections, open wounds, severe inflammation or contagious conditions. We may decline and reschedule you once treated.</li>
+          <li>Please tell Thato about any allergies to acrylics, gels, acetone or skincare ingredients before your service starts.</li>
+        </ul>
+        <h3>Nail art, repairs and removals</h3>
+        <ul>
+          <li>Custom nail art takes extra time. Please mention it when you book.</li>
+          <li>If a nail chips or lifts within 3 days of your appointment, contact us for a free repair.</li>
+          <li>We do not work over sets done elsewhere. Please ask about a full removal with your new set.</li>
+        </ul>
+        <h3>Children and guests</h3>
+        <ul><li>Extra guests and children are by prior arrangement only, to keep the space safe and relaxing.</li></ul>
+      </div></details>
+      <label class="check"><input type="checkbox" id="agree"> I have read and agree to the booking policy.</label>
+      <p class="error" id="error" role="alert"></p>
+      <button class="btn" id="book">Book appointment</button>
+    </section>
+  </main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let services = [], serviceId = null, time = null, info = { deposit: 100, phone: '' };
+
+const today = new Date().toLocaleDateString('en-CA');
+const max = new Date(Date.now() + 60 * 864e5).toLocaleDateString('en-CA');
+function firstOpenDay() { const d = new Date(); if (d.getHours() >= 15) d.setDate(d.getDate() + 1); if (d.getDay() === 0) d.setDate(d.getDate() + 1); return d.toLocaleDateString('en-CA'); }
+$('date').min = today; $('date').max = max; $('date').value = firstOpenDay();
+
+fetch('/api/info').then(r => r.json()).then(i => info = i);
+fetch('/api/services').then(r => r.json()).then(list => {
+  services = list;
+  let html = '', group = '';
+  list.forEach((s, i) => {
+    if (s.group !== group) { group = s.group; html += `<div class="group">${s.group}</div>`; }
+    html += `<label class="service">
+      <span class="svc"><input type="radio" name="service" value="${s.id}" ${i === 0 ? 'checked' : ''}>
+        <span><span class="nm">${s.name}</span><small>${s.duration} min</small></span></span><b>R${s.price}</b></label>`;
+  });
+  $('services').innerHTML = html;
+  serviceId = list[0].id;
+  document.querySelectorAll('[name=service]').forEach(r => r.addEventListener('change', e => { serviceId = e.target.value; loadSlots(); }));
+  loadSlots();
+});
+$('date').addEventListener('change', loadSlots);
+
+async function loadSlots() {
+  time = null;
+  if (!serviceId || !$('date').value) return;
+  const r = await fetch(`/api/slots?service=${serviceId}&date=${$('date').value}`);
+  const slots = await r.json();
+  $('slots').innerHTML = slots.length
+    ? slots.map(t => `<button type="button" class="slot" aria-pressed="false" data-t="${t}">${t}</button>`).join('')
+    : '<p class="note">No free times on this day. Please try another date.</p>';
+  document.querySelectorAll('.slot').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.slot').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true'); time = b.dataset.t;
+  }));
+}
+
+$('book').addEventListener('click', async () => {
+  $('error').textContent = '';
+  if (!time) { $('error').textContent = 'Please choose a time.'; return; }
+  if (!$('agree').checked) { $('error').textContent = 'Please agree to the booking policy.'; return; }
+  $('book').disabled = true;
+  const res = await fetch('/api/bookings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: $('name').value, phone: $('phone').value, email: $('email').value, serviceId, date: $('date').value, time })
+  });
+  const data = await res.json();
+  $('book').disabled = false;
+  if (!res.ok) { $('error').textContent = data.error; loadSlots(); return; }
+  const day = new Date(data.date + 'T00:00:00').toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' });
+  const wa = '27' + info.phone.replace(/^0/, '');
+  const msg = encodeURIComponent(`Hi Thato, I booked ${data.service} on ${day} at ${data.time}. My name is ${data.name}. Please send me the deposit details.`);
+  const safeName = data.name.replace(/[<>&]/g, '');
+  $('app').innerHTML = `<div class="done"><h2>Almost done, ${safeName}</h2>
+    <p>${data.service}<br>${day} at ${data.time}<br>Total: R${data.price}</p>
+    <p><b>Your time is held, but it is only confirmed once you pay the R${data.deposit} deposit.</b> Message Thato on WhatsApp to get the payment details.</p>
+    <a class="btn" href="https://wa.me/${wa}?text=${msg}">Message Thato on WhatsApp</a>
+    <p class="note">In the full version, a branded confirmation email is sent to ${data.email.replace(/[<>&]/g, '')}. <a href="email-preview.html">See a sample email</a>.</p>
+    <p class="note">Or call ${info.phone}.</p></div>`;
+});
+</script>
+</body>
+</html>
